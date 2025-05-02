@@ -1,0 +1,14 @@
+
+node_modules/
+*.log
+.DS_Store
+__pycache__/
+.ipynb_checkpoints/
+.env
+
+node_modules/
+*.log
+.DS_Store
+__pycache__/
+.ipynb_checkpoints/
+.env
