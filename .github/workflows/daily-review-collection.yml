@@ -8,31 +8,37 @@ on:
 jobs:
   collect-reviews:
     runs-on: ubuntu-latest
-    
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
-      
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-        
+
+    - name: Change to PV_Reviews directory
+      run: cd PV_Reviews
+
     - name: Install dependencies
       run: |
+        cd PV_Reviews
         python -m pip install --upgrade pip
         pip install -r requirements-clean.txt
-        
+
     - name: Install Playwright browsers
       run: |
+        cd PV_Reviews
         playwright install chromium
-        
+
     - name: Run review collection
       env:
         GOOGLE_EMAIL: ${{ secrets.GOOGLE_EMAIL }}
         GOOGLE_PASSWORD: ${{ secrets.GOOGLE_PASSWORD }}
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       run: |
+        cd PV_Reviews
         python src/collectors/review_collector.py
         
     - name: Upload collected data
