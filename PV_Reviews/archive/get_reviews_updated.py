@@ -13,6 +13,20 @@ import re
 load_dotenv()
 
 # Constants
+# Added logic to handle 'More Reviews' button until all reviews are processed.
+def handle_more_reviews(page):
+    while True:
+        try:
+            more_reviews_button = page.query_selector('button[aria-label="More Reviews"]')
+            if more_reviews_button:
+                more_reviews_button.click()
+                time.sleep(2)  # Allow time for new reviews to load
+            else:
+                break  # Exit the loop if the button is not found
+        except Exception as e:
+            print(f"Error clicking 'More Reviews': {e}")
+            break
+
 MAX_REVIEWS = 20  # Adjust based on daily volume
 OUTPUT_DIR = "/Users/rajeshpanchanathan/Library/CloudStorage/GoogleDrive-rajesh@genwise.in/My Drive/PV/Auto_Review_Response"
 
@@ -28,6 +42,9 @@ def collect_reviews():
         )
 
         page = context.new_page()
+        
+        # Handle 'More Reviews' button to load all reviews
+        handle_more_reviews(page)
         
         metadata = {
             'business_id': 'PV',

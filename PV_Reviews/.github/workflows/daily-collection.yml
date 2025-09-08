@@ -1,0 +1,87 @@
+name: Daily Review Collection
+
+on:
+  schedule:
+    # Run daily at 6:00 AM UTC (11:30 AM IST)
+    - cron: '0 6 * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  collect-reviews:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y xvfb
+        
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-clean.txt
+        
+    - name: Install Playwright browsers
+      run: |
+        playwright install chromium
+        playwright install-deps chromium
+        
+    - name: Create necessary directories
+      run: |
+        mkdir -p data logs
+        
+    - name: Restore database from previous runs
+      uses: actions/cache/restore@v3
+      with:
+        path: data/reviews.db
+        key: reviews-db-${{ github.run_number }}
+        restore-keys: |
+          reviews-db-
+          
+    - name: Run automated collection
+      env:
+        GOOGLE_EMAIL: ${{ secrets.GOOGLE_EMAIL }}
+        GOOGLE_PASSWORD: ${{ secrets.GOOGLE_PASSWORD }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+        SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+        RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+        SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+        SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      run: |
+        # Use virtual display for headless browser
+        xvfb-run -a python automated_collect.py
+        
+    - name: Save database for future runs
+      uses: actions/cache/save@v3
+      if: always()
+      with:
+        path: data/reviews.db
+        key: reviews-db-${{ github.run_number }}
+        
+    - name: Upload logs as artifacts
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: collection-logs-${{ github.run_number }}
+        path: |
+          logs/
+          data/*.csv
+        retention-days: 30
+        
+    - name: Upload database backup
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: database-backup-${{ github.run_number }}
+        path: data/reviews.db
+        retention-days: 90

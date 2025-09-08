@@ -1,0 +1,77 @@
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Data files
+*.csv
+*.xlsx
+*.xls
+*.json
+!requirements*.json
+!package*.json
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# Screenshots and browser data
+screenshots/
+*.png
+*.jpg
+*.jpeg
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Browser profiles and cache
+*profile*/
+user_data_dir/
+
+# Progress tracking
+reply_progress.json
