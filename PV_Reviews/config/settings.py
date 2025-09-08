@@ -16,6 +16,12 @@ class Config:
     google_password: str = os.getenv('GOOGLE_PASSWORD', '')
     anthropic_api_key: str = os.getenv('ANTHROPIC_API_KEY', '')
     
+    # Database Configuration
+    supabase_url: str = os.getenv('SUPABASE_URL', '')
+    supabase_anon_key: str = os.getenv('SUPABASE_ANON_KEY', '')
+    supabase_service_key: str = os.getenv('SUPABASE_SERVICE_KEY', '')
+    use_database: bool = True  # Switch between CSV and database modes
+    
     # Business Details
     business_listing_id: str = "11382416837896137085"
     business_url: str = "https://g.co/kgs/HgU3VjS"
@@ -33,7 +39,7 @@ class Config:
     batch_delay_mins: int = 15
     
     # Response Generation
-    claude_model: str = "claude-3-sonnet-20240229"
+    claude_model: str = "claude-3-5-sonnet-20241022"
     response_max_tokens: int = 600
     response_temperature: float = 0.7
     

@@ -4,5 +4,8 @@ anthropic>=0.50.0
 python-dotenv>=1.0.0
 playwright>=1.40.0
 
+# Database and API
+supabase>=2.0.0
+
 # Optional: for enhanced logging and data validation
 pydantic>=2.0.0

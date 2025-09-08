@@ -1,0 +1,136 @@
+name: Daily Review Collection and Response Generation
+
+on:
+  schedule:
+    # Run daily at 6:00 AM IST (00:30 UTC) 
+    - cron: '30 0 * * *'
+  
+  # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      max_reviews:
+        description: 'Maximum number of reviews to process (default: 50)'
+        required: false
+        default: '50'
+      generate_responses:
+        description: 'Generate AI responses (true/false)'
+        required: false
+        default: 'true'
+
+jobs:
+  collect-reviews:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-clean.txt
+        
+    - name: Install Playwright browsers
+      run: |
+        playwright install chromium
+        
+    - name: Set up environment variables
+      env:
+        GOOGLE_EMAIL: ${{ secrets.GOOGLE_EMAIL }}
+        GOOGLE_PASSWORD: ${{ secrets.GOOGLE_PASSWORD }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      run: |
+        echo "GOOGLE_EMAIL=${GOOGLE_EMAIL}" >> .env
+        echo "GOOGLE_PASSWORD=${GOOGLE_PASSWORD}" >> .env
+        echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" >> .env
+        echo "SUPABASE_URL=${SUPABASE_URL}" >> .env
+        echo "SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}" >> .env
+        
+    - name: Test database connection
+      run: |
+        python test_database.py
+        
+    - name: Collect new reviews
+      id: collect
+      run: |
+        python -c "
+        import sys
+        sys.path.append('.')
+        from src.collectors.review_collector import ReviewCollector
+        
+        collector = ReviewCollector()
+        max_reviews = int('${{ github.event.inputs.max_reviews }}' or '50')
+        
+        # Override max_reviews in config for this run
+        collector.extractor.config.max_reviews = max_reviews
+        
+        try:
+            count, location = collector.collect_unreplied_reviews()
+            print(f'::set-output name=reviews_collected::{count}')
+            print(f'Collected {count} new reviews')
+            
+            if count == 0:
+                print('No new reviews found')
+                sys.exit(0)
+        except Exception as e:
+            print(f'Error collecting reviews: {e}')
+            sys.exit(1)
+        "
+      continue-on-error: true
+      
+    - name: Generate responses
+      if: ${{ github.event.inputs.generate_responses != 'false' && steps.collect.outputs.reviews_collected != '0' }}
+      run: |
+        python -c "
+        import sys
+        sys.path.append('.')
+        from src.processors.response_generator_db import ResponseGenerator
+        
+        generator = ResponseGenerator()
+        max_responses = int('${{ github.event.inputs.max_reviews }}' or '50')
+        
+        try:
+            results = generator.process_unreplied_reviews(limit=max_responses)
+            print(f'Generated {results[\"responses_generated\"]} responses')
+            print(f'Errors: {results[\"errors\"]}')
+            
+            if results['errors'] > 0:
+                print('Error details:')
+                for error in results['error_details'][:3]:
+                    print(f'  - {error}')
+                    
+        except Exception as e:
+            print(f'Error generating responses: {e}')
+            sys.exit(1)
+        "
+        
+    - name: Database statistics
+      run: |
+        python -c "
+        import sys
+        sys.path.append('.')
+        from src.utils.database import ReviewDatabase
+        
+        db = ReviewDatabase()
+        stats = db.get_run_summary()
+        
+        print('📊 Database Statistics:')
+        print(f'  Total reviews: {stats.get(\"total_reviews\", 0)}')
+        print(f'  Unreplied reviews: {stats.get(\"unreplied_reviews\", 0)}')
+        print(f'  Recent runs: {len(stats.get(\"recent_runs\", []))}')
+        "
+        
+    - name: Upload logs (on failure)
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: logs
+        path: logs/
+        retention-days: 7

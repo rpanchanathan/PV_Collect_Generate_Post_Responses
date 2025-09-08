@@ -1,8 +1,8 @@
 # PV Reviews - Master TODO List & Progress Tracker
 
 **Last Updated:** 2025-01-08  
-**Current Phase:** Phase 1 - Fix Foundation  
-**Thread Status:** Active Implementation
+**Current Phase:** Architecture Migration Planning  
+**Thread Status:** Ready for Handover - Migration Plan Complete
 
 ## 🎯 OVERALL GOAL
 Complete automated review collection → AI response generation → human review → automated posting workflow
@@ -82,24 +82,39 @@ Complete automated review collection → AI response generation → human review
 
 ## 🚨 IMMEDIATE NEXT ACTIONS
 
-1. **Fix AUTOMATION_SETUP.md** - Remove SQLite references, document CSV system
-2. **Create master CSV database** - Consolidate existing data files
-3. **Test GitHub Actions** - Verify workflow runs successfully
-4. **Design enhanced schema** - Add human review columns
+**CRITICAL DECISION:** Current CSV-based architecture is fundamentally flawed for GitHub Actions environment. 
+
+**RECOMMENDED PATH:** Migrate to Serverless + Free Database Architecture (detailed in `ARCHITECTURE_MIGRATION.md`)
+
+1. **Review `ARCHITECTURE_MIGRATION.md`** - Complete migration plan with 5-hour timeline
+2. **Start Phase 1: Database Setup** - Create Supabase account and schema (30 min)
+3. **Implement database integration** - Replace CSV logic with proper persistence
+4. **Test new architecture** - End-to-end validation
+
+**Alternative:** Fix current system temporarily, but expect ongoing issues with state management in GitHub Actions.
 
 ---
 
 ## 💬 THREAD HANDOVER NOTES
 
-**For future Claude instances:**
-- This TODO list is the **source of truth** for project progress
-- Always check and update this file when continuing work
-- Current focus is Phase 1 - foundation fixes
-- Master CSV creation is critical next step
-- Human-in-the-loop is the key missing piece
+**CONTEXT:** User lost confidence due to extended troubleshooting session. Current architecture has fundamental issues.
 
-**Files to prioritize reading:**
-1. This file (`PROJECT_TODO.md`)
-2. `src/collectors/review_collector.py` 
-3. `AUTOMATION_SETUP.md`
-4. Current data files in `data/` directory
+**DECISION MADE:** Migrate to better architecture with zero monthly costs ($0 requirement)
+
+**For future Claude instances:**
+- **READ `ARCHITECTURE_MIGRATION.md` FIRST** - Complete migration plan ready for implementation
+- This TODO list tracks current broken system - new system bypasses these issues
+- User prioritizes: better long-term solution + minimal costs
+- Current GitHub Actions workflow fails due to missing data/ directory (expected)
+
+**Critical Files for Migration:**
+1. `ARCHITECTURE_MIGRATION.md` - **START HERE**
+2. `src/collectors/review_collector.py` - needs database integration
+3. `src/processors/Generate_Responses.py` - needs database integration  
+4. `.github/workflows/daily-review-collection.yml` - needs database credentials
+
+**Current Broken Issues (to be fixed by migration):**
+- CSV files in gitignored folder = no persistence in CI/CD
+- GitHub Actions environment doesn't have data/ directory
+- Manual CSV editing for human review = poor UX
+- Repository structure confusion (subfolder issues)

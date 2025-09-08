@@ -1,0 +1,101 @@
+name: Test PV Reviews System
+
+on:
+  # Allow manual triggering only
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Test to run'
+        required: true
+        default: 'database'
+        type: choice
+        options:
+        - database
+        - responses
+        - full-system
+      max_reviews:
+        description: 'Max reviews for full test (default: 3)'
+        required: false
+        default: '3'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements-clean.txt
+        
+    - name: Set up environment variables
+      env:
+        GOOGLE_EMAIL: ${{ secrets.GOOGLE_EMAIL }}
+        GOOGLE_PASSWORD: ${{ secrets.GOOGLE_PASSWORD }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+        SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+      run: |
+        echo "GOOGLE_EMAIL=${GOOGLE_EMAIL}" >> .env
+        echo "GOOGLE_PASSWORD=${GOOGLE_PASSWORD}" >> .env
+        echo "ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}" >> .env
+        echo "SUPABASE_URL=${SUPABASE_URL}" >> .env
+        echo "SUPABASE_SERVICE_KEY=${SUPABASE_SERVICE_KEY}" >> .env
+        
+    - name: Test Database Connection
+      run: |
+        echo "🧪 Testing database connection..."
+        python test_database.py
+        
+    - name: Test Response Generation
+      if: ${{ github.event.inputs.test_type == 'responses' || github.event.inputs.test_type == 'full-system' }}
+      run: |
+        echo "🤖 Testing response generation..."
+        python -c "
+        from src.processors.response_generator_db import ResponseGenerator
+        generator = ResponseGenerator()
+        results = generator.process_unreplied_reviews(limit=2)
+        print(f'✅ Generated {results[\"responses_generated\"]} responses')
+        print(f'❌ Errors: {results[\"errors\"]}')
+        "
+        
+    - name: Full System Test (Database Only)
+      if: ${{ github.event.inputs.test_type == 'full-system' }}
+      run: |
+        echo "🔄 Testing full system (database mode only)..."
+        echo "Note: Skipping browser-based collection in CI"
+        
+        # Test database operations
+        python -c "
+        from src.utils.database import ReviewDatabase
+        
+        db = ReviewDatabase()
+        
+        # Get current stats
+        stats = db.get_run_summary()
+        print(f'Database has {stats.get(\"total_reviews\", 0)} reviews')
+        print(f'{stats.get(\"unreplied_reviews\", 0)} are unreplied')
+        
+        # Test getting unreplied reviews
+        unreplied = db.get_unreplied_reviews(limit=3)
+        print(f'Found {len(unreplied)} unreplied reviews for testing')
+        
+        # Test getting pending responses  
+        pending = db.get_pending_responses(limit=3)
+        print(f'Found {len(pending)} pending responses')
+        
+        print('✅ Full system database test completed')
+        "
+        
+    - name: Print Final Status
+      run: |
+        echo "🎉 Test completed successfully!"
+        echo "System is ready for automated daily runs"

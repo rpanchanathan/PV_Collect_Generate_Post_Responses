@@ -12,6 +12,7 @@ sys.path.append(str(Path(__file__).parent.parent.parent))
 
 from config.settings import config
 from src.utils.logging_config import setup_logging
+from src.utils.database import ReviewDatabase
 import glob
 
 logger = setup_logging()
@@ -328,34 +329,43 @@ class ReviewCollector:
     def __init__(self):
         self.authenticator = GoogleAuthenticator()
         self.extractor = ReviewExtractor()
+        self.db = ReviewDatabase()
     
     def _get_existing_review_ids(self) -> set:
-        """Get all Review IDs from master database file to prevent duplicates."""
-        existing_ids = set()
-        
+        """Get all Review IDs from database to prevent duplicates."""
         try:
-            master_db_path = config.data_dir / 'reviews_master_database.csv'
-            
-            if master_db_path.exists():
-                logger.info(f"Reading master database: {master_db_path}")
-                df = pd.read_csv(master_db_path)
-                
-                if 'Review ID' in df.columns:
-                    existing_ids = set(df['Review ID'].dropna().astype(str))
-                    logger.info(f"Found {len(existing_ids)} existing review IDs in master database")
-                else:
-                    logger.warning("Master database missing 'Review ID' column")
+            # Get all reviews from database and extract IDs
+            if config.use_database:
+                # Use database
+                all_reviews = self.db.client.table('reviews').select('review_id').execute()
+                existing_ids = {row['review_id'] for row in all_reviews.data if all_reviews.data}
+                logger.info(f"Found {len(existing_ids)} existing review IDs in database")
+                return existing_ids
             else:
-                logger.info("Master database not found - will create new one")
-            
-            return existing_ids
+                # Fall back to CSV (legacy mode)
+                existing_ids = set()
+                master_db_path = config.data_dir / 'reviews_master_database.csv'
+                
+                if master_db_path.exists():
+                    logger.info(f"Reading master database: {master_db_path}")
+                    df = pd.read_csv(master_db_path)
+                    
+                    if 'Review ID' in df.columns:
+                        existing_ids = set(df['Review ID'].dropna().astype(str))
+                        logger.info(f"Found {len(existing_ids)} existing review IDs in master database")
+                    else:
+                        logger.warning("Master database missing 'Review ID' column")
+                else:
+                    logger.info("Master database not found - will create new one")
+                
+                return existing_ids
             
         except Exception as e:
-            logger.warning(f"Error reading master database: {e}")
+            logger.warning(f"Error reading existing reviews: {e}")
             return set()
     
     def collect_unreplied_reviews(self) -> Tuple[int, Optional[str]]:
-        """Collect unreplied reviews and save to CSV."""
+        """Collect unreplied reviews and save to database."""
         logger.info("Starting review collection process")
         
         # Get existing review IDs to prevent duplicates
@@ -421,30 +431,49 @@ class ReviewCollector:
                 
                 logger.info(f"Duplicate reviews skipped: {duplicates_skipped}")
                 
-                # Save to master database and create backup
+                # Save to database or CSV based on configuration
                 if reviews_data:
-                    df = pd.DataFrame(reviews_data)
-                    master_db_path = config.data_dir / 'reviews_master_database.csv'
-                    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                    
-                    # Add collection timestamp to new reviews
-                    df['Collection_Timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                    
-                    # Append to master database (or create if doesn't exist)
-                    if master_db_path.exists():
-                        logger.info(f"Appending {len(reviews_data)} new reviews to master database")
-                        df.to_csv(master_db_path, mode='a', header=False, index=False, escapechar='\\', doublequote=True, quoting=1)
+                    if config.use_database:
+                        # Save to database
+                        logger.info(f"Saving {len(reviews_data)} new reviews to database")
+                        total_saved, new_reviews = self.db.save_reviews(reviews_data)
+                        
+                        # Log the collection run
+                        timestamp = datetime.now().strftime('%Y-%m-%d')
+                        self.db.log_run(
+                            run_date=timestamp,
+                            reviews_collected=len(reviews_data),
+                            new_reviews=total_saved,
+                            duration_seconds=0,  # Could be calculated if needed
+                            status='completed'
+                        )
+                        
+                        logger.info(f"Successfully saved {total_saved} new reviews to database")
+                        return total_saved, "database"
                     else:
-                        logger.info(f"Creating new master database with {len(reviews_data)} reviews")
-                        df.to_csv(master_db_path, index=False, escapechar='\\', doublequote=True, quoting=1)
-                    
-                    # Create timestamped backup copy for this collection run
-                    backup_filename = config.data_dir / f'reviews_backup_{timestamp}.csv'
-                    df.to_csv(backup_filename, index=False, escapechar='\\', doublequote=True, quoting=1)
-                    
-                    logger.info(f"Successfully saved {len(reviews_data)} new reviews to master database")
-                    logger.info(f"Created backup: {backup_filename}")
-                    return len(reviews_data), str(master_db_path)
+                        # Legacy CSV mode
+                        df = pd.DataFrame(reviews_data)
+                        master_db_path = config.data_dir / 'reviews_master_database.csv'
+                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                        
+                        # Add collection timestamp to new reviews
+                        df['Collection_Timestamp'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                        
+                        # Append to master database (or create if doesn't exist)
+                        if master_db_path.exists():
+                            logger.info(f"Appending {len(reviews_data)} new reviews to master database")
+                            df.to_csv(master_db_path, mode='a', header=False, index=False, escapechar='\\', doublequote=True, quoting=1)
+                        else:
+                            logger.info(f"Creating new master database with {len(reviews_data)} reviews")
+                            df.to_csv(master_db_path, index=False, escapechar='\\', doublequote=True, quoting=1)
+                        
+                        # Create timestamped backup copy for this collection run
+                        backup_filename = config.data_dir / f'reviews_backup_{timestamp}.csv'
+                        df.to_csv(backup_filename, index=False, escapechar='\\', doublequote=True, quoting=1)
+                        
+                        logger.info(f"Successfully saved {len(reviews_data)} new reviews to master database")
+                        logger.info(f"Created backup: {backup_filename}")
+                        return len(reviews_data), str(master_db_path)
                 
                 return 0, None
                 
