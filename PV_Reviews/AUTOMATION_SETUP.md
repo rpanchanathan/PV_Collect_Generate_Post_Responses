@@ -5,12 +5,12 @@ This guide explains how to set up automated daily review collection using GitHub
 ## 🎯 Overview
 
 The automation system:
-- ✅ **Runs daily** at 6:00 AM UTC (11:30 AM IST) 
-- ✅ **SQLite database** storage for all reviews
-- ✅ **Email summaries** sent to rajesh@genwise.in
+- ✅ **Runs daily** at 6:30 AM IST (1:00 AM UTC) 
+- ✅ **CSV database** storage with master file (`reviews_master_database.csv`)
+- ✅ **Email notifications** sent to rajesh@genwise.in
 - ✅ **Free hosting** on GitHub Actions (2,000 minutes/month)
-- ✅ **Persistent data** via GitHub Actions cache + artifacts
-- ✅ **Error handling** and retry logic
+- ✅ **Duplicate prevention** across all collection runs
+- ✅ **Error handling** and backup system
 
 ## 🚀 Setup Instructions
 
@@ -74,51 +74,50 @@ Add the following **Repository Secrets**:
 ### Email Summary Includes:
 - ✅ **Run Status** (Success/Failed)
 - ✅ **New Reviews Count**
-- ✅ **Total Reviews** in database
-- ✅ **Unreplied Reviews** count
-- ✅ **Run Duration**
-- ✅ **7-Day History** table
+- ✅ **Duplicates Skipped** count
+- ✅ **Collection Timestamp**
 - ✅ **Error Details** (if any)
 
 ### Example Email Subject Lines:
-- `✅ PV Reviews: 5 new reviews collected`
-- `✅ PV Reviews: No new reviews (all up to date)`
-- `❌ PV Reviews: Collection failed - Authentication error`
+- `✅ PV Reviews Collection - 2025-01-08 06:30: 5 new reviews`
+- `✅ PV Reviews Collection - 2025-01-08 06:30: No new reviews`
+- `❌ PV Reviews Collection - 2025-01-08 06:30: Failed`
 
-## 🗄️ Database Schema
+## 🗄️ Data Structure
 
-SQLite database stores:
+**Master CSV Database** (`data/reviews_master_database.csv`):
+- All review data (name, rating, text, Review ID, timestamps)
+- Collection metadata (Collection_Timestamp)
+- Comprehensive reviewer information
+- Individual ratings (Food, Service, Atmosphere)
+- Images and metadata
 
-**Reviews Table:**
-- All review data (name, rating, text, timestamps)
-- Response tracking (generated, posted, replied)
-- Collection metadata
-
-**Run Logs Table:**
-- Daily run statistics
-- Performance metrics
-- Error tracking
+**Daily Backup Files** (`data/reviews_backup_TIMESTAMP.csv`):
+- Timestamped copies of each collection run
+- Historical record of daily activity
+- Recovery backup in case master file corrupts
 
 ## 📁 Data Persistence
 
-- **Database**: Stored in GitHub Actions cache (persistent across runs)
-- **Backups**: Daily database backups in GitHub artifacts (90-day retention)
-- **Logs**: Collection logs in artifacts (30-day retention)
+- **Master Database**: `data/reviews_master_database.csv` (append-only)
+- **Daily Backups**: `data/reviews_backup_YYYYMMDD_HHMMSS.csv` 
+- **Artifacts**: GitHub Actions uploads data/ folder for 90-day retention
+- **Logs**: Collection logs in GitHub Actions (workflow run history)
 
 ## ⚙️ Configuration
 
 ### Change Schedule
-Edit `.github/workflows/daily-collection.yml`:
+Edit `.github/workflows/daily-review-collection.yml`:
 ```yaml
 schedule:
-  - cron: '0 6 * * *'  # 6:00 AM UTC daily
+  - cron: '0 1 * * *'  # 6:30 AM IST (1:00 AM UTC) daily
 ```
 
 ### Change Email Recipients
 Update `RECIPIENT_EMAIL` secret in GitHub.
 
-### Modify Email Content
-Edit `src/utils/notifications.py` for custom email templates.
+### Modify Collection Settings
+Edit `config/settings.py` for business URL, listing ID, and collection parameters.
 
 ## 🚨 Troubleshooting
 
@@ -144,31 +143,25 @@ Edit `src/utils/notifications.py` for custom email templates.
 
 ### Debug Commands:
 
-**Test Email Locally:**
+**Test Review Collection Locally:**
+```bash
+python src/collectors/review_collector.py
+```
+
+**Check Master Database:**
 ```bash
 python -c "
-import os
-os.environ['SENDER_EMAIL'] = 'your@email.com'
-os.environ['SENDER_PASSWORD'] = 'app_password'
-os.environ['RECIPIENT_EMAIL'] = 'rajesh@genwise.in'
-
-from src.utils.notifications import EmailNotifier
-from src.utils.database import ReviewDatabase
-
-notifier = EmailNotifier()
-db = ReviewDatabase()
-summary = db.get_run_summary()
-notifier.send_daily_summary(summary)
+import pandas as pd
+df = pd.read_csv('data/reviews_master_database.csv')
+print(f'Total reviews: {len(df)}')
+print(f'Latest collection: {df[\"Collection_Timestamp\"].max()}')
+print(df.head())
 "
 ```
 
-**Test Database:**
+**Generate Responses for Reviews:**
 ```bash
-python -c "
-from src.utils.database import ReviewDatabase
-db = ReviewDatabase()
-print(db.get_run_summary())
-"
+python src/processors/Generate_Responses.py
 ```
 
 ## 💰 Cost Analysis (Free Tier)
@@ -183,9 +176,10 @@ print(db.get_run_summary())
 - **Gmail SMTP**: FREE ✅
 - **Alternative**: Resend (3,000 emails/month free)
 
-### Database:
-- **SQLite file**: ~1-10MB
+### Storage:
+- **CSV files**: ~1-50MB depending on review volume
 - **GitHub storage**: 1GB free ✅
+- **Artifacts retention**: 90 days (configurable)
 
 ## 🔄 Alternative Platforms
 
@@ -199,9 +193,10 @@ If GitHub Actions limits are exceeded:
 ## 📈 Scaling Options
 
 For higher volume:
-- Switch to PostgreSQL (Supabase/Neon free tiers)
+- Switch to PostgreSQL database (Supabase/Neon free tiers)
 - Use dedicated email service (SendGrid/Mailgun)
 - Deploy to VPS (DigitalOcean $5/month)
+- Implement SQLite for better query performance
 
 ---
 
