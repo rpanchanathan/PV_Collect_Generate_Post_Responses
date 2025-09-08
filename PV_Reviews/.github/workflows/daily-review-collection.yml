@@ -1,0 +1,47 @@
+name: Daily Review Collection
+
+on:
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+
+jobs:
+  collect-reviews:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    - name: Install dependencies
+      run: |
+        cd PV_Reviews
+        python -m pip install --upgrade pip
+        pip install -r requirements-clean.txt
+    - name: Install Playwright
+      run: |
+        cd PV_Reviews  
+        playwright install chromium
+    - name: Run collection
+      env:
+        GOOGLE_EMAIL: ${{ secrets.GOOGLE_EMAIL }}
+        GOOGLE_PASSWORD: ${{ secrets.GOOGLE_PASSWORD }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      run: |
+        cd PV_Reviews
+        python src/collectors/review_collector.py
+    - name: Upload data
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: review-data
+        path: PV_Reviews/data/
+    - name: Send email
+      if: always()
+      env:
+        SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+        SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+        RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+        SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+        SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      run: python3 -c "import smtplib,os;from email.mime.text import MimeText;m=MimeText('PV Reviews collection completed');m['Subject']='PV Reviews Complete';m['From']=os.getenv('SENDER_EMAIL');m['To']=os.getenv('RECIPIENT_EMAIL');s=smtplib.SMTP(os.getenv('SMTP_SERVER'),int(os.getenv('SMTP_PORT')));s.starttls();s.login(os.getenv('SENDER_EMAIL'),os.getenv('SENDER_PASSWORD'));s.send_message(m);s.quit();print('sent')"
