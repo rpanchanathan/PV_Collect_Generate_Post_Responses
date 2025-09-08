@@ -1,96 +1,95 @@
-name: Daily Review Collection
+  name: Daily Review Collection
 
-on:
-  schedule:
-    - cron: '0 1 * * *'  # 6:30 AM IST (1:00 AM UTC)
-  workflow_dispatch:  # Allow manual trigger
+  on:
+    schedule:
+      - cron: '0 1 * * *'  # 6:30 AM IST (1:00 AM UTC)
+    workflow_dispatch:  # Allow manual trigger
 
-jobs:
-  collect-reviews:
-    runs-on: ubuntu-latest
+  jobs:
+    collect-reviews:
+      runs-on: ubuntu-latest
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
-    - name: Change to PV_Reviews directory
-      run: cd PV_Reviews
+      - name: Install dependencies
+        run: |
+          cd PV_Reviews
+          python -m pip install --upgrade pip
+          pip install -r requirements-clean.txt
 
-    - name: Install dependencies
-      run: |
-        cd PV_Reviews
-        python -m pip install --upgrade pip
-        pip install -r requirements-clean.txt
+      - name: Install Playwright browsers
+        run: |
+          cd PV_Reviews
+          playwright install chromium
 
-    - name: Install Playwright browsers
-      run: |
-        cd PV_Reviews
-        playwright install chromium
+      - name: Run review collection
+        env:
+          GOOGLE_EMAIL: ${{ secrets.GOOGLE_EMAIL }}
+          GOOGLE_PASSWORD: ${{ secrets.GOOGLE_PASSWORD }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          cd PV_Reviews
+          python src/collectors/review_collector.py
 
-    - name: Run review collection
-      env:
-        GOOGLE_EMAIL: ${{ secrets.GOOGLE_EMAIL }}
-        GOOGLE_PASSWORD: ${{ secrets.GOOGLE_PASSWORD }}
-        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      run: |
-        cd PV_Reviews
-        python src/collectors/review_collector.py
-        
-    - name: Upload collected data
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: review-data
-        path: data/
-        
-    - name: Send email notification
-      if: always()
-      env:
-        SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
-        SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
-        RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
-        SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
-        SMTP_PORT: ${{ secrets.SMTP_PORT }}
-      run: |
-        python -c "
-        import smtplib
-        import os
-        from email.mime.text import MimeText
-        from email.mime.multipart import MimeMultipart
-        from datetime import datetime
-        
-        sender_email = os.getenv('SENDER_EMAIL')
-        sender_password = os.getenv('SENDER_PASSWORD')
-        recipient_email = os.getenv('RECIPIENT_EMAIL')
-        smtp_server = os.getenv('SMTP_SERVER')
-        smtp_port = int(os.getenv('SMTP_PORT'))
-        
-        msg = MimeMultipart()
-        msg['From'] = sender_email
-        msg['To'] = recipient_email
-        msg['Subject'] = f'PV Reviews Collection - {datetime.now().strftime(\"%Y-%m-%d %H:%M\")}'
-        
-        body = '''
-        Daily review collection completed for Paati Veedu restaurant.
-        
-        Timestamp: {timestamp}
-        Workflow Status: {'✅ Success' if '${{ job.status }}' == 'success' else '❌ Failed'}
-        
-        Check the GitHub Actions tab for detailed logs and collected data.
-        '''.format(timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-        
-        msg.attach(MimeText(body, 'plain'))
-        
-        server = smtplib.SMTP(smtp_server, smtp_port)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        text = msg.as_string()
-        server.sendmail(sender_email, recipient_email, text)
-        server.quit()
-        print('Email notification sent successfully')
-        "
+      - name: Upload collected data
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: review-data
+          path: PV_Reviews/data/
+
+      - name: Send email notification
+        if: always()
+        env:
+          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
+          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
+          RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+        run: |
+          cd PV_Reviews
+          python -c "
+          import smtplib
+          import os
+          from email.mime.text import MimeText
+          from email.mime.multipart import MimeMultipart
+          from datetime import datetime
+
+          sender_email = os.getenv('SENDER_EMAIL')
+          sender_password = os.getenv('SENDER_PASSWORD')
+          recipient_email = os.getenv('RECIPIENT_EMAIL')
+          smtp_server = os.getenv('SMTP_SERVER')
+          smtp_port = int(os.getenv('SMTP_PORT'))
+
+          msg = MimeMultipart()
+          msg['From'] = sender_email
+          msg['To'] = recipient_email
+          msg['Subject'] = f'PV Reviews Collection -
+  {datetime.now().strftime(\"%Y-%m-%d %H:%M\")}'
+
+          body = '''Daily review collection completed for Paati Veedu
+  restaurant.
+
+  Timestamp: {timestamp}
+  Workflow Status: Success
+
+  Check the GitHub Actions tab for detailed logs and collected
+  data.'''.format(timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+
+          msg.attach(MimeText(body, 'plain'))
+
+          server = smtplib.SMTP(smtp_server, smtp_port)
+          server.starttls()
+          server.login(sender_email, sender_password)
+          text = msg.as_string()
+          server.sendmail(sender_email, recipient_email, text)
+          server.quit()
+          print('Email notification sent successfully')
+          "
