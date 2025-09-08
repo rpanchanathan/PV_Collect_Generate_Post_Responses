@@ -2,8 +2,8 @@
 
   on:
     schedule:
-      - cron: '0 1 * * *'  # 6:30 AM IST (1:00 AM UTC)
-    workflow_dispatch:  # Allow manual trigger
+      - cron: '0 1 * * *'
+    workflow_dispatch:
 
   jobs:
     collect-reviews:
@@ -55,41 +55,22 @@
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
         run: |
           cd PV_Reviews
-          python -c "
-          import smtplib
-          import os
+          python3 -c "
+          import smtplib, os
           from email.mime.text import MimeText
-          from email.mime.multipart import MimeMultipart
           from datetime import datetime
 
-          sender_email = os.getenv('SENDER_EMAIL')
-          sender_password = os.getenv('SENDER_PASSWORD')
-          recipient_email = os.getenv('RECIPIENT_EMAIL')
-          smtp_server = os.getenv('SMTP_SERVER')
-          smtp_port = int(os.getenv('SMTP_PORT'))
+          now = datetime.now()
+          timestamp = now.isoformat()
+          msg = MimeText('PV Reviews collection completed at ' + timestamp)
+          msg['Subject'] = 'PV Reviews Collection - ' + now.strftime('%Y-%m-%d')
+          msg['From'] = os.getenv('SENDER_EMAIL')
+          msg['To'] = os.getenv('RECIPIENT_EMAIL')
 
-          msg = MimeMultipart()
-          msg['From'] = sender_email
-          msg['To'] = recipient_email
-          msg['Subject'] = f'PV Reviews Collection -
-  {datetime.now().strftime(\"%Y-%m-%d %H:%M\")}'
-
-          body = '''Daily review collection completed for Paati Veedu
-  restaurant.
-
-  Timestamp: {timestamp}
-  Workflow Status: Success
-
-  Check the GitHub Actions tab for detailed logs and collected
-  data.'''.format(timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-
-          msg.attach(MimeText(body, 'plain'))
-
-          server = smtplib.SMTP(smtp_server, smtp_port)
+          server = smtplib.SMTP(os.getenv('SMTP_SERVER'),int(os.getenv('SMTP_PORT')))
           server.starttls()
-          server.login(sender_email, sender_password)
-          text = msg.as_string()
-          server.sendmail(sender_email, recipient_email, text)
+          server.login(os.getenv('SENDER_EMAIL'), os.getenv('SENDER_PASSWORD'))
+          server.send_message(msg)
           server.quit()
-          print('Email notification sent successfully')
+          print('Email sent successfully')
           "
